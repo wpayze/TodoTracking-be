@@ -26,6 +26,10 @@ const userSchema = Schema({
         type: String,
         required: true
     },
+    defaultAddress: {
+        type: Schema.Types.ObjectId,
+        ref: 'Address'
+    },
     tokens: [{
         token: {
             type: String,

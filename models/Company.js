@@ -18,6 +18,9 @@ var CompanySchema = new Schema({
   },
   telephone: {
     type: Number
+  },
+  configs: {
+    type: Object
   }
 }, { timestamps: true });
 

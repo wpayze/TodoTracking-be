@@ -4,37 +4,53 @@ const Company = require('../models/Company');
 const Address = require('../models/Address');
 
 exports.getUserByToken = async (req,res) => {
-    res.send(req.user);
+    let { user } = req; 
+    res.send(user);
 }
 
 exports.registerUser = async (req,res) => {
     // Create a new user
     try {
-        const user = new User(req.body.user);
+
+        let { user: userData, address: addressData, customer: customerData = {}, company: companyData = {} } = req.body;
+
+        const user = new User(userData);
         await user.save();
 
-        req.body.address.user = user._id;
-        const address = new Address(req.body.address);
+        addressData.user = user._id;
+        const address = new Address(addressData);
         await address.save();
 
-        switch (req.body.user.type) {
-            case "customer":
-                req.body.customer.address = address._id;
-                req.body.customer.user = user._id;
-                req.body.customer.locker = await getNewLocker(req.body.customer.company);
+        user.defaultAddress = address._id;
 
-                const customer = new Customer(req.body.customer);
+        switch (userData.type) {
+            case "customer":
+                customerData.address = address._id;
+                customerData.user = user._id;
+                customerData.locker = await getNewLocker(customerData.company);
+
+                const customer = new Customer(customerData);
                 await customer.save();
 
                 user.customer = customer._id;
-                user.company = req.body.customer.company;
+                user.company = customerData.company;
                 await user.save();
                 break;
             case "company":
-                req.body.company.address = address._id;
-                req.body.company.user = user._id;
+                companyData.address = address._id;
+                companyData.user = user._id;
+                companyData.configs.states = [
+                    {
+                        text: "Recibido",
+                        color: "#2196F3"
+                    },
+                    {
+                        text: "Entregado",
+                        color: "#4CAF50"
+                    }
+                ]
 
-                const company = new Company(req.body.company);
+                const company = new Company(companyData);
                 await company.save();
 
                 user.company = company._id;
@@ -43,6 +59,53 @@ exports.registerUser = async (req,res) => {
         }
         const token = await user.generateAuthToken();
         res.status(201).send({ user, token });
+    } catch (error) {
+        console.log(error);
+        res.status(400).send({error});
+    }
+}
+
+exports.getAllUsers = async (req,res) => {
+
+    try {
+        let users = await User.find( {company: req.user.company._id, type: "customer" } ).populate("company").populate("customer").populate("defaultAddress");
+        res.send(users);
+
+    } catch (error) {
+        console.log(error);
+        res.status(400).send({error});
+    }
+
+}
+
+exports.updateInfo = async (req,res) => {
+    try {
+
+        let address = {};
+        let {user: userdata, customer: customerdata, company: companydata, address: addressdata } = req.body;
+
+        if (customerdata) {
+            await Customer.findByIdAndUpdate(customerdata._id, customerdata, {new: true});
+        }
+
+        if (companydata) {
+            await Company.findByIdAndUpdate(companydata._id, companydata, {new: true});
+        }
+
+        if (addressdata) {
+            address = await Address.findByIdAndUpdate(addressdata._id, addressdata, {new: true});
+        }
+
+        if  (userdata) {
+            await User.findByIdAndUpdate(userdata._id, userdata, {new: true});
+        }
+
+        var user_id = (userdata && userdata._id) ? userdata._id : req.user._id;
+        var user = await User.findById(user_id).populate("company").populate("customer");
+        user._doc.address = address;
+
+        res.send(user);
+
     } catch (error) {
         console.log(error);
         res.status(400).send({error});
